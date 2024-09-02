@@ -21,6 +21,72 @@ for orientation in ExifTags.TAGS.keys():
     if ExifTags.TAGS[orientation] == "Orientation":
         break
 
+def letterbox(image, labels, hw_ori, new_shape, scaleup=False, color=(114, 114, 114)):
+    # Resize and pad image while meeting stride-multiple constraints
+    shape = image.shape[:2]  # current shape [height, width]
+    h, w = shape[:]
+    h0, w0 = hw_ori
+    hw_scale = np.array([h / h0, w / w0])
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+
+    # Scale ratio (new / old)
+    r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
+    if not scaleup:  # only scale down, do not scale up (for better test mAP)
+        r = min(r, 1.0)
+
+    # Compute padding
+    new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
+    dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
+
+    dw /= 2  # divide padding into 2 sides
+    dh /= 2
+    hw_pad = np.array([dh, dw])
+
+    if shape[::-1] != new_unpad:  # resize
+        image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
+
+    # convert labels
+    if labels and labels.size:  # normalized xywh to pixel xyxy format
+        labels[:, 1:] = xywhn2xyxy(labels[:, 1:], r * w, r * h, padw=hw_pad[1], padh=hw_pad[0])
+
+    return image, labels, hw_ori, hw_scale, hw_pad
+
+def label_norm(image, labels, xyxy2xywh_=True):
+    if len(labels) == 0:
+        return image, labels
+
+    if xyxy2xywh_:
+        labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
+
+    labels[:, [2, 4]] /= image.shape[0]  # normalized height 0-1
+    labels[:, [1, 3]] /= image.shape[1]  # normalized width 0-1
+
+    return image, labels
+
+def label_pad(image, labels, padding_size=160, padding_value=-1):
+    # create fixed label, avoid dynamic shape problem.
+    labels_out = np.full((padding_size, 6), padding_value, dtype=np.float32)
+    nL = len(labels)
+    if nL:
+        labels_out[: min(nL, padding_size), 0:1] = 0.0
+        labels_out[: min(nL, padding_size), 1:] = labels[: min(nL, padding_size), :]
+    return image, labels_out
+
+def image_norm(image, labels, scale=255.0):
+    image = image.astype(np.float32, copy=False)
+    image /= scale
+    return image, labels
+
+def image_transpose(image, labels, bgr2rgb=True, hwc2chw=True):
+    if bgr2rgb:
+        image = image[:, :, ::-1]
+    if hwc2chw:
+        image = image.transpose(2, 0, 1)
+    return image, labels
 
 class PublayNetDataset:
     """
@@ -354,71 +420,19 @@ class PublayNetDataset:
         return sample_labels, sample_images, sample_masks
 
     def letterbox(self, image, labels, hw_ori, new_shape, scaleup=False, color=(114, 114, 114)):
-        # Resize and pad image while meeting stride-multiple constraints
-        shape = image.shape[:2]  # current shape [height, width]
-        h, w = shape[:]
-        h0, w0 = hw_ori
-        hw_scale = np.array([h / h0, w / w0])
-        if isinstance(new_shape, int):
-            new_shape = (new_shape, new_shape)
-
-        # Scale ratio (new / old)
-        r = min(new_shape[0] / shape[0], new_shape[1] / shape[1])
-        if not scaleup:  # only scale down, do not scale up (for better test mAP)
-            r = min(r, 1.0)
-
-        # Compute padding
-        new_unpad = int(round(shape[1] * r)), int(round(shape[0] * r))
-        dw, dh = new_shape[1] - new_unpad[0], new_shape[0] - new_unpad[1]  # wh padding
-
-        dw /= 2  # divide padding into 2 sides
-        dh /= 2
-        hw_pad = np.array([dh, dw])
-
-        if shape[::-1] != new_unpad:  # resize
-            image = cv2.resize(image, new_unpad, interpolation=cv2.INTER_LINEAR)
-        top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
-        left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
-        image = cv2.copyMakeBorder(image, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color)  # add border
-
-        # convert labels
-        if labels.size:  # normalized xywh to pixel xyxy format
-            labels[:, 1:] = xywhn2xyxy(labels[:, 1:], r * w, r * h, padw=hw_pad[1], padh=hw_pad[0])
-
-        return image, labels, hw_ori, hw_scale, hw_pad
+        return letterbox(image, labels, hw_ori, new_shape, scaleup, color)
 
     def label_norm(self, image, labels, xyxy2xywh_=True):
-        if len(labels) == 0:
-            return image, labels
-
-        if xyxy2xywh_:
-            labels[:, 1:5] = xyxy2xywh(labels[:, 1:5])  # convert xyxy to xywh
-
-        labels[:, [2, 4]] /= image.shape[0]  # normalized height 0-1
-        labels[:, [1, 3]] /= image.shape[1]  # normalized width 0-1
-
-        return image, labels
+        return label_norm(image, labels, xyxy2xywh_)
 
     def label_pad(self, image, labels, padding_size=160, padding_value=-1):
-        # create fixed label, avoid dynamic shape problem.
-        labels_out = np.full((padding_size, 6), padding_value, dtype=np.float32)
-        nL = len(labels)
-        if nL:
-            labels_out[: min(nL, padding_size), 0:1] = 0.0
-            labels_out[: min(nL, padding_size), 1:] = labels[: min(nL, padding_size), :]
-        return image, labels_out
+        return label_pad(image, labels, padding_size, padding_value)
 
     def image_norm(self, image, labels, scale=255.0):
-        image = image.astype(np.float32, copy=False)
-        image /= scale
-        return image, labels
+        return image_norm(image, labels, scale)
 
     def image_transpose(self, image, labels, bgr2rgb=True, hwc2chw=True):
-        if bgr2rgb:
-            image = image[:, :, ::-1]
-        if hwc2chw:
-            image = image.transpose(2, 0, 1)
-        return image, labels
+        return image_transpose(image, labels, bgr2rgb, hwc2chw)
 
     def _sample_segments(self, img, labels, segments, probability=0.5):
         # Implement Copy-Paste augmentation https://arxiv.org/abs/2012.07177, labels as nx5 np.array(cls, xyxy)
