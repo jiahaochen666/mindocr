@@ -64,130 +64,130 @@ class PublayNetDataset:
         **kwargs,
     ):
         self.cache_version = 0.1
-        self.path = dataset_path
+        # self.path = dataset_path
 
-        # acceptable image suffixes
-        self.img_formats = ["bmp", "jpg", "jpeg", "png", "tif", "tiff", "dng", "webp", "mpo"]
-        self.help_url = "https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data"
+        # # acceptable image suffixes
+        # self.img_formats = ["bmp", "jpg", "jpeg", "png", "tif", "tiff", "dng", "webp", "mpo"]
+        # self.help_url = "https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data"
 
-        self.img_size = img_size
-        self.augment = augment
-        self.rect = rect
-        self.stride = stride
-        self.transform_pipeline = transform_pipeline
-        self.is_train = is_train
-        if is_train:
-            self.dataset_column_names = ["images", "labels"]
-        else:
-            self.dataset_column_names = ["images", "labels", "image_ids", "hw_ori", "hw_scale", "pad"]
+        # self.img_size = img_size
+        # self.augment = augment
+        # self.rect = rect
+        # self.stride = stride
+        # self.transform_pipeline = transform_pipeline
+        # self.is_train = is_train
+        # if is_train:
+        #     self.dataset_column_names = ["images", "labels"]
+        # else:
+        #     self.dataset_column_names = ["images", "labels", "image_ids", "hw_ori", "hw_scale", "pad"]
 
-        try:
-            f = []  # image files
-            for p in self.path if isinstance(self.path, list) else [self.path]:
-                p = Path(p)  # os-agnostic
-                if p.is_dir():  # dir
-                    f += glob.glob(str(p / "**" / "*.*"), recursive=True)
-                elif p.is_file():  # file
-                    with open(p, "r") as t:
-                        t = t.read().strip().splitlines()
-                        parent = str(p.parent) + os.sep
-                        f += [x.replace("./", parent) if x.startswith("./") else x for x in t]  # local to global path
-                else:
-                    raise Exception(f"{p} does not exist")
-            self.img_files = sorted([x.replace("/", os.sep) for x in f if x.split(".")[-1].lower() in self.img_formats])
-            assert self.img_files, "No images found"
-        except Exception as e:
-            raise Exception(f"Error loading data from {self.path}: {e}\nSee {self.help_url}")
+        # try:
+        #     f = []  # image files
+        #     for p in self.path if isinstance(self.path, list) else [self.path]:
+        #         p = Path(p)  # os-agnostic
+        #         if p.is_dir():  # dir
+        #             f += glob.glob(str(p / "**" / "*.*"), recursive=True)
+        #         elif p.is_file():  # file
+        #             with open(p, "r") as t:
+        #                 t = t.read().strip().splitlines()
+        #                 parent = str(p.parent) + os.sep
+        #                 f += [x.replace("./", parent) if x.startswith("./") else x for x in t]  # local to global path
+        #         else:
+        #             raise Exception(f"{p} does not exist")
+        #     self.img_files = sorted([x.replace("/", os.sep) for x in f if x.split(".")[-1].lower() in self.img_formats])
+        #     assert self.img_files, "No images found"
+        # except Exception as e:
+        #     raise Exception(f"Error loading data from {self.path}: {e}\nSee {self.help_url}")
 
-        # Check cache
-        self.label_files = self._img2label_paths(self.img_files)  # labels
-        cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix(".cache.npy")  # cached labels
-        if cache_path.is_file():
-            cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
-            if cache["version"] == self.cache_version and cache["hash"] == self._get_hash(
-                self.label_files + self.img_files
-            ):
-                logger.info("Dataset Cache file hash/version check success.")
-                logger.info(f"Load dataset cache from [{cache_path}] success.")
-            else:
-                logger.info("Dataset cache file hash/version check fail.")
-                logger.info("Dataset caching now...")
-                cache, exists = self.cache_labels(cache_path), False  # cache
-                logger.info("Dataset caching success.")
-        else:
-            logger.info("No dataset cache available, caching now...")
-            cache, exists = self.cache_labels(cache_path), False  # cache
-            logger.info("Dataset caching success.")
+        # # Check cache
+        # self.label_files = self._img2label_paths(self.img_files)  # labels
+        # cache_path = (p if p.is_file() else Path(self.label_files[0]).parent).with_suffix(".cache.npy")  # cached labels
+        # if cache_path.is_file():
+        #     cache, exists = np.load(cache_path, allow_pickle=True).item(), True  # load dict
+        #     if cache["version"] == self.cache_version and cache["hash"] == self._get_hash(
+        #         self.label_files + self.img_files
+        #     ):
+        #         logger.info("Dataset Cache file hash/version check success.")
+        #         logger.info(f"Load dataset cache from [{cache_path}] success.")
+        #     else:
+        #         logger.info("Dataset cache file hash/version check fail.")
+        #         logger.info("Dataset caching now...")
+        #         cache, exists = self.cache_labels(cache_path), False  # cache
+        #         logger.info("Dataset caching success.")
+        # else:
+        #     logger.info("No dataset cache available, caching now...")
+        #     cache, exists = self.cache_labels(cache_path), False  # cache
+        #     logger.info("Dataset caching success.")
 
-        # Display cache
-        nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupted, total
-        if exists:
-            d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
-            tqdm(None, desc=d, total=n, initial=n)  # display cache results
-        assert nf > 0 or not augment, f"No labels in {cache_path}. Can not train without labels. See {self.help_url}"
+        # # Display cache
+        # nf, nm, ne, nc, n = cache.pop("results")  # found, missing, empty, corrupted, total
+        # if exists:
+        #     d = f"Scanning '{cache_path}' images and labels... {nf} found, {nm} missing, {ne} empty, {nc} corrupted"
+        #     tqdm(None, desc=d, total=n, initial=n)  # display cache results
+        # assert nf > 0 or not augment, f"No labels in {cache_path}. Can not train without labels. See {self.help_url}"
 
-        # Read cache
-        cache.pop("hash")  # remove hash
-        cache.pop("version")  # remove version
-        labels, shapes, self.segments = zip(*cache.values())
-        self.labels = list(labels)
-        self.img_shapes = np.array(shapes, dtype=np.float64)
-        self.img_files = list(cache.keys())  # update
-        if not is_train:
-            if os.path.isfile(annotations_path):
-                with open(annotations_path, "r") as f:
-                    data = json.load(f)
-                file_id_dict = dict()
-                for item in data["images"]:
-                    file_id_dict[item["file_name"]] = item["id"]
-                self.image_ids = [file_id_dict[img_file.split("/")[-1]] for img_file in self.img_files]
-            else:
-                self.image_ids = self.img_files
-        else:
-            self.image_ids = None
-        self.label_files = self._img2label_paths(cache.keys())  # update
+        # # Read cache
+        # cache.pop("hash")  # remove hash
+        # cache.pop("version")  # remove version
+        # labels, shapes, self.segments = zip(*cache.values())
+        # self.labels = list(labels)
+        # self.img_shapes = np.array(shapes, dtype=np.float64)
+        # self.img_files = list(cache.keys())  # update
+        # if not is_train:
+        #     if os.path.isfile(annotations_path):
+        #         with open(annotations_path, "r") as f:
+        #             data = json.load(f)
+        #         file_id_dict = dict()
+        #         for item in data["images"]:
+        #             file_id_dict[item["file_name"]] = item["id"]
+        #         self.image_ids = [file_id_dict[img_file.split("/")[-1]] for img_file in self.img_files]
+        #     else:
+        #         self.image_ids = self.img_files
+        # else:
+        #     self.image_ids = None
+        # self.label_files = self._img2label_paths(cache.keys())  # update
 
-        n = len(labels)  # number of images
-        bi = np.floor(np.arange(n) / batch_size).astype(np.int_)  # batch index
-        nb = bi[-1] + 1  # number of batches
-        self.batch = bi  # batch index of image
+        # n = len(labels)  # number of images
+        # bi = np.floor(np.arange(n) / batch_size).astype(np.int_)  # batch index
+        # nb = bi[-1] + 1  # number of batches
+        # self.batch = bi  # batch index of image
 
-        # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
-        self.imgs, self.img_hw_ori, self.indices = (
-            [
-                None,
-            ]
-            * n,
-            [
-                None,
-            ]
-            * n,
-            range(n),
-        )
+        # # Cache images into memory for faster training (WARNING: large datasets may exceed system RAM)
+        # self.imgs, self.img_hw_ori, self.indices = (
+        #     [
+        #         None,
+        #     ]
+        #     * n,
+        #     [
+        #         None,
+        #     ]
+        #     * n,
+        #     range(n),
+        # )
 
-        # Rectangular Train/Test
-        if self.rect:
-            # Sort by aspect ratio
-            s = self.img_shapes  # wh
-            ar = s[:, 1] / s[:, 0]  # aspect ratio
-            irect = ar.argsort()
-            self.img_files = [self.img_files[i] for i in irect]
-            self.label_files = [self.label_files[i] for i in irect]
-            self.labels = [self.labels[i] for i in irect]
-            self.img_shapes = s[irect]  # wh
-            ar = ar[irect]
+        # # Rectangular Train/Test
+        # if self.rect:
+        #     # Sort by aspect ratio
+        #     s = self.img_shapes  # wh
+        #     ar = s[:, 1] / s[:, 0]  # aspect ratio
+        #     irect = ar.argsort()
+        #     self.img_files = [self.img_files[i] for i in irect]
+        #     self.label_files = [self.label_files[i] for i in irect]
+        #     self.labels = [self.labels[i] for i in irect]
+        #     self.img_shapes = s[irect]  # wh
+        #     ar = ar[irect]
 
-            # Set training image shapes
-            shapes = [[1, 1]] * nb
-            for i in range(nb):
-                ari = ar[bi == i]
-                mini, maxi = ari.min(), ari.max()
-                if maxi < 1:
-                    shapes[i] = [maxi, 1]
-                elif mini > 1:
-                    shapes[i] = [1, 1 / mini]
+        #     # Set training image shapes
+        #     shapes = [[1, 1]] * nb
+        #     for i in range(nb):
+        #         ari = ar[bi == i]
+        #         mini, maxi = ari.min(), ari.max()
+        #         if maxi < 1:
+        #             shapes[i] = [maxi, 1]
+        #         elif mini > 1:
+        #             shapes[i] = [1, 1 / mini]
 
-            self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int32) * stride
+        #     self.batch_shapes = np.ceil(np.array(shapes) * img_size / stride + pad).astype(np.int32) * stride
 
     def cache_labels(self, path=Path("./labels.cache")):
         # Get orientation exif tag

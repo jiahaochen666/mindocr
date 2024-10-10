@@ -23,7 +23,7 @@ def create_parser():
     parser.add_argument("--mode", type=int, default=0, help="0 for graph mode, 1 for pynative mode ")  # added
 
     # params for text detector
-    parser.add_argument("--image_dir", type=str, required=True, help="image path or image directory")
+    parser.add_argument("--image_dir", type=str, help="image path or image directory")
     # parser.add_argument("--page_num", type=int, default=0)
     parser.add_argument(
         "--det_algorithm",
